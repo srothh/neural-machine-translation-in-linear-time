@@ -25,7 +25,6 @@ class WMTLoader(data.Dataset):
         """
     def __init__(self, split="train", src_lang="de", tgt_lang="en", max_length=128, cache_dir='./wmt19_cache'):
         self.dataset = load_dataset("wmt19", "de-en", split=split, cache_dir=cache_dir)
-        self.tokenizer = BertTokenizer.from_pretrained("bert-base-multilingual-cased")
         self.src_lang = src_lang
         self.tgt_lang = tgt_lang
         self.max_length = max_length
