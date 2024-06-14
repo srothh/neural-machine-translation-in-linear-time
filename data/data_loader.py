@@ -104,7 +104,8 @@ class WMTLoader(data.Dataset):
 
 
 if __name__ == '__main__':
-    cache_dir = './wmt19_cache'
+    # use drive in which to save dataset in cache
+    cache_dir = 'D:/wmt19_cache'
     wmt_loader = WMTLoader(split="train", cache_dir=cache_dir)
     # Number of workers provides parallel loading
     num_workers = 4
