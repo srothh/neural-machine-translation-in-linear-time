@@ -90,6 +90,10 @@ class WMTLoader(data.Dataset):
         """
         Function needed to combine single
         examples together by stacking Tensors
+        The results are stacked tensors for the
+        source and target batches which are feed
+        into the neural network
+
         :param batch:
         :return:
         """
