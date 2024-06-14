@@ -12,6 +12,9 @@ class WMTLoader(data.Dataset):
     """`WMT dataset loader
 
         This class enables the loading of the WMT german-english translation
+        WMTLoader class uses BertTokenizer as tokenizer model, and it is a sub-word-tokenizer,
+        which means it splits unknown word into smaller words. For example, 'words' is split
+        into the pieces 'word' and 's'.
 
         Args:
             split="train" The train part of 34,8 Million rows
@@ -35,15 +38,31 @@ class WMTLoader(data.Dataset):
         return len(self.dataset)
 
     def __getitem__(self, index):
+        """
+        Function for receiving a source and target element and to tokenize them.
+        Both the source and the target text are going to be tokenized, which means they are
+        split into several smaller pieces, named tokens and then converted into numerical
+        numbers, called token-ids
+
+        :param index:
+        :return:
+        """
         item = self.dataset[index]
         src_text = item[self.src_lang]
         tgt_text = item[self.tgt_lang]
 
+        # self.tokenizer is a object of type transformers from the Bert model
+        # padding="max_length": is used to fill sequence to maximal length
+        # truncation = True: Means that the sequence is cutted, if longer than max_length
+        # return_tensors="pt": Means that a pytorch tensor is returned
+        # the source text is tokenized into smaller elements
         src_tokens = self.tokenizer(src_text, max_length=self.max_length, padding="max_length", truncation=True,
-                                    return_tensors="pt")
+                                  return_tensors="pt")
+        # the target text is tokenized into smaller elements
         tgt_tokens = self.tokenizer(tgt_text, max_length=self.max_length, padding="max_length", truncation=True,
                                     return_tensors="pt")
-
+        # Now both the source and the target tokens are converted into numerical data, called token-ids
+        # Squeeze is used to remove dimensions with value 1
         src_ids = src_tokens["input_ids"].squeeze()
         tgt_ids = tgt_tokens["input_ids"].squeeze()
 
@@ -79,6 +98,7 @@ class WMTLoader(data.Dataset):
         tgt_batch = torch.stack(tgt_batch)
         return src_batch, tgt_batch
 
+
 if __name__ == '__main__':
     cache_dir = './wmt19_cache'
     wmt_loader = WMTLoader(split="train", cache_dir=cache_dir)
@@ -86,6 +106,10 @@ if __name__ == '__main__':
     num_workers = 4
     data_load = DataLoader(wmt_loader, batch_size=32, collate_fn=wmt_loader.collate_fn, num_workers=num_workers)
     temp = data_load
+
+    for batch in wmt_loader:
+        src_batch, tgt_batch = batch
+        break
 
 
 
