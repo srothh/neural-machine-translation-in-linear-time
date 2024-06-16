@@ -1,4 +1,7 @@
+import torch
 from torch import nn
+from torch.nn import init
+import torch.nn.functional as F
 
 
 # TODO: Everything, just a basic placeholder CNN encoder/decoder for now
@@ -78,4 +81,34 @@ class DynamicUnfolding(nn.Module):
         target_length = self.calculate_target_length(source)
         while end_of_sequence_symbol is not None:
             pass
+
+class InputEmbeddingTensor:
+    """
+    Class which enables the embedding of tokens.
+
+    :param vocab_size: The size of the vocabulary as int.
+    :param embed_size: The size of the embedding units as int.
+    """
+    def __init__(self, vocab_size, embed_size):
+        super(InputEmbeddingTensor, self).__init__()
+        self.vocab_size = vocab_size
+        self.embed_size = embed_size
+        self.lookup_table_non_zero = nn.Embedding(vocab_size - 1, embed_size)
+        init.xavier_uniform_(self.lookup_table_non_zero.weight)
+
+    def embed(self, inputs):
+        """
+        In this method the first n tokens are embedded via look-up table.
+        The n tokens serve as targets for the predictions.
+
+        :param inputs: The train input values from batch
+        :return: A embedded tensor of size n × 2d where d is the number of inner
+                channels in the network
+        """
+        lookup_table_zero = torch.zeros(1, self.embed_size, device=inputs.device)
+
+        lookup_table = torch.cat((lookup_table_zero, self.lookup_table_non_zero.weight), 0)
+
+        return F.embedding(inputs, lookup_table)
+
 
