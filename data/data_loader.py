@@ -1,4 +1,8 @@
+import json
+
+import requests
 import torch
+import pickle
 import torch.utils.data as data
 from torch.utils.data import Dataset, DataLoader
 from transformers import BertTokenizer
@@ -32,6 +36,43 @@ class WMTLoader(data.Dataset):
         self.cache_dir = cache_dir
 
         self.tokenizer = BertTokenizer.from_pretrained("bert-base-multilingual-cased")
+
+        self.data = self.download_data(0, 100)
+
+    def download_data(self, offset, length):
+        """
+        Method for downloading the dataset as JSON
+        F.e. if the first 10 rows have to be downloaded, offset has to
+        be 0 and length has to be 10
+
+        :param offset: The offset used in the url
+        :param length: The length of the selected number of rows in the dataset
+        :return:
+        """
+        url = f"https://datasets-server.huggingface.co/rows?dataset=wmt%2Fwmt19&config=de-en&split=train&offset={offset}&length={length}"
+        response = requests.get(url)
+        if response.status_code == 200:
+            loaded_data = response.json()
+            return loaded_data['rows']
+        else:
+            print(f"Error while downloading data: {response.status_code}")
+            return []
+
+    def save_data_to_json(self, data, file_path):
+        """
+        Writes data into the JSON object
+
+        :param data: The data that has to be writen into file
+        :param file_path: The file path where the file has to be saved
+        """
+        with open(file_path, 'a', encoding='utf-8') as f:
+            for item in data:
+                json.dump(item, f, ensure_ascii=False)
+                f.write('\n')
+
+    def download_entire_de_en_dataset(self):
+        # TODO: further implementation of this method
+        pass
 
     def __len__(self):
         return len(self.dataset)

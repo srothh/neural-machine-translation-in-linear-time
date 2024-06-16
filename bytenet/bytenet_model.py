@@ -2,6 +2,9 @@ import torch
 from torch import nn
 from torch.nn import init
 import torch.nn.functional as F
+from torch.utils.data import DataLoader
+
+from data.data_loader import WMTLoader
 
 
 # TODO: Everything, just a basic placeholder CNN encoder/decoder for now
@@ -111,4 +114,11 @@ class InputEmbeddingTensor:
 
         return F.embedding(inputs, lookup_table)
 
+if __name__ == '__main__':
+    cache_dir = 'D:/wmt19_cache'
+    # wmt_loader = WMTLoader(split="train", cache_dir=cache_dir)
+    # index = 0
+    # source, target = wmt_loader[index]
+    # print("Source:", source)
+    # print("Target:", target)
 
