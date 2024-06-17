@@ -8,6 +8,7 @@ from torch.utils.data import Dataset, DataLoader
 from transformers import BertTokenizer
 from datasets import load_dataset
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from torch import FloatTensor, LongTensor
 
@@ -109,6 +110,83 @@ class WMTLoader(data.Dataset):
         return src_batch, tgt_batch
 
 
+class WMT19JSONLoader:
+    def __init__(self, file_path, source_lang='de', target_lang='en', max_length=128):
+        self.source_lang = source_lang
+        self.target_lang = target_lang
+        self.max_length = max_length
+        self.tokenizer = BertTokenizer.from_pretrained("bert-base-multilingual-cased")
+        self.file_path = file_path
+
+    def load_json_data(self, file_path):
+        """
+        Function that loads the downloaded JSON file
+
+        :param file_path:
+        :return:
+        """
+        with open(file_path, 'r', encoding='utf-8') as f:
+            loaded_data = [json.loads(line) for line in f]
+        return loaded_data
+
+    def extract_source_target(self, load_data):
+        """
+        Function that extracts out of the downloaded JSON the
+        german rows as source and the english rows as targets
+
+        :param load_data:
+        :param source_lang:
+        :param target_lang:
+        :return:
+        """
+        source_texts = []
+        target_texts = []
+        for item in load_data:
+            source_texts.append(item[self.source_lang])
+            target_texts.append(item[self.target_lang])
+        return source_texts, target_texts
+
+    def tokenize_texts(self, texts):
+        """
+        Function for tokenizing the text data
+        Uses BERT-Tokenizer as tokenizer model
+
+        :param texts:
+        :return:
+        """
+        tokenized_texts = []
+        for text in texts:
+            tokens = self.tokenizer(text, max_length=self.max_length, padding="max_length", truncation=True, return_tensors="pt")
+            tokenized_texts.append(tokens['input_ids'].squeeze())
+        return tokenized_texts
+
+    def load_and_tokenize(self, json_file_path):
+        """
+        Function that does the load json data
+        and the tokenizing process
+
+        :param json_file_path:
+        """
+        loaded_data = self.load_json_data(json_file_path)
+
+        source_texts, target_texts = self.extract_source_target(loaded_data)
+
+        # The tokenized source and targets
+        # self.tokenizer is a object of type transformers from the Bert model
+        # padding="max_length": is used to fill sequence to maximal length
+        # truncation = True: Means that the sequence is cutted, if longer than max_length
+        # return_tensors="pt": Means that a pytorch tensor is returned
+        # the source text is tokenized into smaller elements
+        tokenized_source_texts = self.tokenize_texts(source_texts)
+
+        # the target text is tokenized into smaller elements
+        tokenized_target_texts = self.tokenize_texts(target_texts)
+
+        #TODO: evetually squeeze as in WMTLoader
+
+        return tokenized_source_texts, tokenized_target_texts
+
+
 def download_data(offset, length):
     """
     Method for downloading the dataset as JSON
@@ -124,6 +202,7 @@ def download_data(offset, length):
     response = requests.get(url, params=query_parameters)
     if response.status_code == 200:
         loaded_data = response.json()
+        print(f"Downloading dataset-offset: {offset}")
         return loaded_data['rows']
     else:
         print(f"Error while downloading data: {response.status_code}")
@@ -144,16 +223,39 @@ def save_data_to_json(load_data, file_path):
             f.write('\n')
 
 
-def download_entire_de_en_dataset(batch_size, output_dir):
+def download_batch_and_save(offset, length, output_file):
+    """
+    Downloads and saves the batch
+
+    :param offset: The offset which is currently used to download
+    :param length: The length is defined with 100
+    :param output_file: The name of the file to be saved
+    """
+    loaded_data = download_data(offset, length)
+    save_data_to_json(loaded_data, output_file)
+
+
+def download_entire_de_en_dataset(batch_size, output_dir, num_workers):
+    """
+    Downloads the entire WMT19 dataset. Uses a ThreadPoolExecutor for
+    faster download of the dataset.
+
+    :param batch_size:
+    :param output_dir:
+    :param num_workers:
+    """
     offset = 0
-    while True:
-        load_data = download_data(offset, batch_size)
-        if not data:
-            break
-        output_file = os.path.join(output_dir, 'wmt_19_de_en.json')
-        save_data_to_json(load_data, output_file)
-        offset += batch_size
-        print(f"Downloading dataset-offset: {offset}")
+    output_file = os.path.join(output_dir, 'wmt_19_de_en.json')
+    with ThreadPoolExecutor(max_workers=num_workers) as executor:
+        futures = []
+        while True:
+            futures.append(executor.submit(download_batch_and_save, offset, batch_size, output_file))
+            offset += batch_size
+            if offset >= 34800000:
+                break
+
+        for future in as_completed(futures):
+            future.result()
 
 
 if __name__ == '__main__':
@@ -174,4 +276,4 @@ if __name__ == '__main__':
 
     # if not os.path.exists(output_dir):
     #     os.makedirs(output_dir)
-    download_entire_de_en_dataset(batch_size, output_dir)
+    download_entire_de_en_dataset(batch_size, output_dir, 4)
