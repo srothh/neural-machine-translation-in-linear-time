@@ -27,6 +27,7 @@ class WMTLoader(data.Dataset):
             max_length=128
             cache_dir='./wmt19_cache' The cache dir where the downloaded dataset is cached
         """
+
     def __init__(self, split="train", src_lang="de", tgt_lang="en", max_length=128, cache_dir='./wmt19_cache'):
         self.dataset = load_dataset("wmt19", "de-en", split=split, cache_dir=cache_dir)
         self.src_lang = src_lang
@@ -38,41 +39,6 @@ class WMTLoader(data.Dataset):
         self.tokenizer = BertTokenizer.from_pretrained("bert-base-multilingual-cased")
 
         self.data = self.download_data(0, 100)
-
-    def download_data(self, offset, length):
-        """
-        Method for downloading the dataset as JSON
-        F.e. if the first 10 rows have to be downloaded, offset has to
-        be 0 and length has to be 10
-
-        :param offset: The offset used in the url
-        :param length: The length of the selected number of rows in the dataset
-        :return:
-        """
-        url = f"https://datasets-server.huggingface.co/rows?dataset=wmt%2Fwmt19&config=de-en&split=train&offset={offset}&length={length}"
-        response = requests.get(url)
-        if response.status_code == 200:
-            loaded_data = response.json()
-            return loaded_data['rows']
-        else:
-            print(f"Error while downloading data: {response.status_code}")
-            return []
-
-    def save_data_to_json(self, data, file_path):
-        """
-        Writes data into the JSON object
-
-        :param data: The data that has to be writen into file
-        :param file_path: The file path where the file has to be saved
-        """
-        with open(file_path, 'a', encoding='utf-8') as f:
-            for item in data:
-                json.dump(item, f, ensure_ascii=False)
-                f.write('\n')
-
-    def download_entire_de_en_dataset(self):
-        # TODO: further implementation of this method
-        pass
 
     def __len__(self):
         return len(self.dataset)
@@ -97,7 +63,7 @@ class WMTLoader(data.Dataset):
         # return_tensors="pt": Means that a pytorch tensor is returned
         # the source text is tokenized into smaller elements
         src_tokens = self.tokenizer(src_text, max_length=self.max_length, padding="max_length", truncation=True,
-                                  return_tensors="pt")
+                                    return_tensors="pt")
         # the target text is tokenized into smaller elements
         tgt_tokens = self.tokenizer(tgt_text, max_length=self.max_length, padding="max_length", truncation=True,
                                     return_tensors="pt")
@@ -143,19 +109,69 @@ class WMTLoader(data.Dataset):
         return src_batch, tgt_batch
 
 
+def download_data(offset, length):
+    """
+    Method for downloading the dataset as JSON
+    F.e. if the first 10 rows have to be downloaded, offset has to
+    be 0 and length has to be 10
+
+    :param offset: The offset used in the url
+    :param length: The length of the selected number of rows in the dataset
+    :return:
+    """
+    url = f"https://datasets-server.huggingface.co/rows?dataset=wmt%2Fwmt19&config=de-en&split=train&offset={offset}&length={length}"
+    query_parameters = {"downloadformat": "json"}
+    response = requests.get(url, params=query_parameters)
+    if response.status_code == 200:
+        loaded_data = response.json()
+        return loaded_data['rows']
+    else:
+        print(f"Error while downloading data: {response.status_code}")
+        return []
+
+
+def save_data_to_json(load_data, file_path):
+    """
+    Writes data into the JSON object
+
+    :param load_data: The data that has to be writen into file
+    :param file_path: The file path where the file has to be saved
+    """
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    with open(file_path, 'a', encoding='utf-8') as f:
+        for item in load_data:
+            json.dump(item, f, ensure_ascii=False)
+            f.write('\n')
+
+
+def download_entire_de_en_dataset(batch_size, output_dir):
+    offset = 0
+    while True:
+        load_data = download_data(offset, batch_size)
+        if not data:
+            break
+        output_file = os.path.join(output_dir, 'wmt_19_de_en.json')
+        save_data_to_json(load_data, output_file)
+        offset += batch_size
+        print(f"Downloading dataset-offset: {offset}")
+
+
 if __name__ == '__main__':
     # use drive in which to save dataset in cache
     cache_dir = 'D:/wmt19_cache'
-    wmt_loader = WMTLoader(split="train", cache_dir=cache_dir)
+    # wmt_loader = WMTLoader(split="train", cache_dir=cache_dir)
     # Number of workers provides parallel loading
-    num_workers = 4
-    data_load = DataLoader(wmt_loader, batch_size=32, collate_fn=wmt_loader.collate_fn, num_workers=num_workers)
-    temp = data_load
+    # num_workers = 4
+    # data_load = DataLoader(wmt_loader, batch_size=32, collate_fn=wmt_loader.collate_fn, num_workers=num_workers)
+    # temp = data_load
+    #
+    # for batch in wmt_loader:
+    #     src_batch, tgt_batch = batch
+    #     break
 
-    for batch in wmt_loader:
-        src_batch, tgt_batch = batch
-        break
+    batch_size = 100
+    output_dir = 'D:\\wmt19_json'
 
-
-
-
+    # if not os.path.exists(output_dir):
+    #     os.makedirs(output_dir)
+    download_entire_de_en_dataset(batch_size, output_dir)
