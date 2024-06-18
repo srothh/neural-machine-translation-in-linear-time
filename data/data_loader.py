@@ -9,6 +9,7 @@ from transformers import BertTokenizer
 from datasets import load_dataset
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from transformers import T5ForConditionalGeneration, AutoTokenizer
 
 from torch import FloatTensor, LongTensor
 
@@ -115,8 +116,9 @@ class WMT19JSONLoader:
         self.source_lang = source_lang
         self.target_lang = target_lang
         self.max_length = max_length
-        self.tokenizer = BertTokenizer.from_pretrained("bert-base-multilingual-cased")
+        # self.tokenizer = BertTokenizer.from_pretrained("bert-base-multilingual-cased")
         self.file_path = file_path
+        self.tokenizer = AutoTokenizer.from_pretrained("google/byt5-small")
 
     def load_json_data(self, file_path):
         """
@@ -125,8 +127,13 @@ class WMT19JSONLoader:
         :param file_path:
         :return:
         """
-        with open(file_path, 'r', encoding='utf-8') as f:
-            loaded_data = [json.loads(line) for line in f]
+        loaded_data = []
+        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+            for line in f:
+                try:
+                    loaded_data.append(json.loads(line.strip()))
+                except json.JSONDecodeError as e:
+                    print(f"Error when line is decoded: {e}")
         return loaded_data
 
     def extract_source_target(self, load_data):
@@ -142,8 +149,8 @@ class WMT19JSONLoader:
         source_texts = []
         target_texts = []
         for item in load_data:
-            source_texts.append(item[self.source_lang])
-            target_texts.append(item[self.target_lang])
+            source_texts.append(item['row']['translation'][self.source_lang])
+            target_texts.append(item['row']['translation'][self.target_lang])
         return source_texts, target_texts
 
     def tokenize_texts(self, texts):
@@ -276,4 +283,7 @@ if __name__ == '__main__':
 
     # if not os.path.exists(output_dir):
     #     os.makedirs(output_dir)
-    download_entire_de_en_dataset(batch_size, output_dir, 4)
+    # download_entire_de_en_dataset(batch_size, output_dir, 4)
+
+    wmt_json_loader = WMT19JSONLoader(output_dir).load_and_tokenize('D:\\wmt19_json\\wmt_19_de_en.json')
+
