@@ -149,8 +149,11 @@ class WMT19JSONLoader:
         source_texts = []
         target_texts = []
         for item in load_data:
-            source_texts.append(item['row']['translation'][self.source_lang])
-            target_texts.append(item['row']['translation'][self.target_lang])
+            if ('row' in item and 'translation' in item['row'] and
+                    self.source_lang in item['row']['translation'] and
+                    self.target_lang in item['row']['translation']):
+                source_texts.append(item['row']['translation'][self.source_lang])
+                target_texts.append(item['row']['translation'][self.target_lang])
         return source_texts, target_texts
 
     def tokenize_texts(self, texts):
