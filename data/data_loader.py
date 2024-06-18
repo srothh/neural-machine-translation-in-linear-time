@@ -261,7 +261,8 @@ def download_entire_de_en_dataset(batch_size, output_dir, num_workers):
         while True:
             futures.append(executor.submit(download_batch_and_save, offset, batch_size, output_file))
             offset += batch_size
-            if offset >= 34800000:
+            # if offset >= 34800000:
+            if offset >= 3480:
                 break
 
         for future in as_completed(futures):
@@ -284,9 +285,10 @@ if __name__ == '__main__':
     batch_size = 100
     output_dir = 'D:\\wmt19_json'
 
-    # if not os.path.exists(output_dir):
-    #     os.makedirs(output_dir)
     # download_entire_de_en_dataset(batch_size, output_dir, 4)
 
-    wmt_json_loader = WMT19JSONLoader(output_dir).load_and_tokenize('D:\\wmt19_json\\wmt_19_de_en.json')
+    wmt_json_loader = WMT19JSONLoader(output_dir)
+    tokenized_source_texts, tokenized_target_texts = wmt_json_loader.load_and_tokenize('D:\\wmt19_json\\wmt_19_de_en.json')
+    src = tokenized_source_texts
+    trgt = tokenized_target_texts
 
