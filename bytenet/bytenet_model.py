@@ -42,6 +42,30 @@ class BytenetDecoder(nn.Module):
         return x
 
 
+# Todo: might needs to be overworked
+class EncoderDecoderStacking(nn.Module):
+    """
+    Stacks the encoder and decoder for the ByteNet model.
+    This means passing the output of the encoder as input to the decoder.
+
+    :param encoder_layers: The number of layers in the encoder as int.
+    :param decoder_layers: The number of layers in the decoder as int.
+    :param num_channels: The number of channels in the network as int.
+    :param kernel_size: The size of the kernel as int.
+    :param dilation_rate: The dilation rate as int.
+
+    :return x: The output of the decoder.
+    """
+    def __init__(self, encoder_layers, decoder_layers, num_channels, kernel_size, dilation_rate):
+        super(EncoderDecoderStacking, self).__init__()
+        self.encoder = BytenetEncoder(encoder_layers, num_channels, kernel_size, dilation_rate)
+        self.decoder = BytenetDecoder(decoder_layers, num_channels, kernel_size, dilation_rate)
+    def forward(self, x):
+        x = self.encoder(x)
+        x = self.decoder(x)
+        return x
+
+
 class DynamicUnfolding(nn.Module):
     """
     Initialize the dynamic unfolding with given parameters.
@@ -85,6 +109,7 @@ class DynamicUnfolding(nn.Module):
         while end_of_sequence_symbol is not None:
             pass
 
+
 class InputEmbeddingTensor:
     """
     Class which enables the embedding of tokens.
@@ -92,6 +117,7 @@ class InputEmbeddingTensor:
     :param vocab_size: The size of the vocabulary as int.
     :param embed_size: The size of the embedding units as int.
     """
+
     def __init__(self, vocab_size, embed_size):
         super(InputEmbeddingTensor, self).__init__()
         self.vocab_size = vocab_size
@@ -114,6 +140,7 @@ class InputEmbeddingTensor:
 
         return F.embedding(inputs, lookup_table)
 
+
 if __name__ == '__main__':
     cache_dir = 'D:/wmt19_cache'
     # wmt_loader = WMTLoader(split="train", cache_dir=cache_dir)
@@ -121,4 +148,3 @@ if __name__ == '__main__':
     # source, target = wmt_loader[index]
     # print("Source:", source)
     # print("Target:", target)
-
