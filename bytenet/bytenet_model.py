@@ -57,7 +57,8 @@ class DynamicUnfolding(nn.Module):
 
     def calculate_target_length(self, source):
         """
-        Calculates the target length for dynamic unfolding
+        Calculates the target length for dynamic unfolding with the
+        formula: |t| = a|s| + b
         Saves unnecessary computing and is more memory efficient
 
         :param source:
@@ -74,8 +75,12 @@ class DynamicUnfolding(nn.Module):
         input for the decoder. the decoder unfold step-
         by-step over the encoder representation until the decoder itself
         outputs an end-of-sequence symbol
+        The unfolding works as for the example "Hi all" as follows:
+        Decoder input: start_token => Decoder output: Hi
+        Decoder input: Hi          => Decoder output: all
+        Decoder input: Hi all      => Decoder output: end_of_sequence
 
-        :param encoder_output: The output of the encoder model used for unfolding
+        :param encoder_output: The output of the encoder model as vector representing a sequence used for unfolding
         :param decoder: The decoder model
         :param source: The source, used for calculating the target length
         """
@@ -121,6 +126,8 @@ class InputEmbeddingTensor:
         super(InputEmbeddingTensor, self).__init__()
         self.vocab_size = vocab_size
         self.embed_size = embed_size
+        # This is the actual lookup table.
+        # A lookup table is an array of data that maps input values to output values
         self.lookup_table_non_zero = nn.Embedding(vocab_size - 1, embed_size)
         init.xavier_uniform_(self.lookup_table_non_zero.weight)
 
@@ -129,14 +136,20 @@ class InputEmbeddingTensor:
         In this method the first n tokens are embedded via look-up table.
         The n tokens serve as targets for the predictions.
 
-        :param inputs: The train input values from batch
+        :param inputs: The train input values from batch, more exact: the tokens
         :return: A embedded tensor of size n × 2d where d is the number of inner
                 channels in the network
         """
         lookup_table_zero = torch.zeros(1, self.embed_size, device=inputs.device)
-
+        # Here the both look up tables are combined. The rows with the zeros and the rows
+        # with values from the actual lookup table are combined therefore
         lookup_table = torch.cat((lookup_table_zero, self.lookup_table_non_zero.weight), 0)
-
+        # Next the input ids are embedded into the lookup table, which means that each id has it own
+        # embedding-vector, f.e:
+        # id: 5 => [1,5,4]; id:7 => [3,2,9]
+        # The input ids are the tokens
+        # If a token sequence of 5;7 is used, the resulting matrix is:
+        # [1,5,4],[3,2,9]
         return F.embedding(inputs, lookup_table)
 
 if __name__ == '__main__':
