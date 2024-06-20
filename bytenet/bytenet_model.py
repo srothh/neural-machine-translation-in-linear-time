@@ -44,7 +44,7 @@ class ResidualBlockReLu(nn.Module):
     :param dilation: The initial dilation rate for the convolution layers.
     """
 
-    def __init__(self, in_features, dilation, k):
+    def __init__(self, in_features, dilation, k, decoder = False):
         super(ResidualBlockReLu, self).__init__()
         self.layer_norm1 = nn.LayerNorm(2 * in_features)
         self.reLu1 = nn.ReLU()
@@ -53,7 +53,10 @@ class ResidualBlockReLu(nn.Module):
         self.reLu2 = nn.ReLU()
         # Masked kernel size is k
         # Dilation only used for masked convolution
-        self.conv2 = Masked1DConvolution(in_features, in_features, k, dilation=dilation)
+        if decoder:
+            self.conv2 = Masked1DConvolution(in_features, in_features, k, dilation=dilation)
+        else:
+            self.conv2 = nn.Conv1d(in_features, in_features, k, dilation=dilation)
         self.layer_norm3 = nn.LayerNorm(in_features)
         self.reLu3 = nn.ReLU()
         self.conv3 = nn.Conv1d(in_features, in_features * 2, 1)
@@ -75,46 +78,72 @@ class ResidualBlockReLu(nn.Module):
 
 # TODO: Everything, just a basic placeholder CNN encoder/decoder for now
 class BytenetEncoder(nn.Module):
-    def __init__(self, num_layers, num_channels, kernel_size, max_dilation_rate):
+    def __init__(self, num_layers, in_features, kernel_size, max_dilation_rate, masked_kernel_size):
         super(BytenetEncoder, self).__init__()
         self.num_layers = num_layers
-        self.num_channels = num_channels
+        self.num_channels = in_features
         self.kernel_size = kernel_size
-        self.layers = nn.ModuleList()
+        self.layers = nn.Sequential()
         dilation_rate = 1
+        # From the Paper:
+        # Model has a series of residual blocks of increased dilation rate
+        # With unmasked convolutions for the encoder
         for i in range(num_layers):
             # Dilation Rate doubles each layer (starting out at 1)
             dilation_rate = dilation_rate * 2
             # Dilation rate does not exceed a given maximum
             # Example from the paper: 16
-            self.layers.append(nn.Conv1d(num_channels, kernel_size,
-                                         dilation_rate if dilation_rate <= max_dilation_rate else max_dilation_rate))
+            self.layers.append(ResidualBlockReLu(in_features, dilation_rate if dilation_rate <= max_dilation_rate else max_dilation_rate, masked_kernel_size))
+        # "the network applies one more convolution"
+        # Note: The output of the residual layers is 2*input_features, however the output of the final convolutions is not specified in the paper
+        # Experimentation needed if it should be 2*input_features or input_features
+        self.layers.append(nn.Conv1d(in_features * 2, in_features, kernel_size))
+        # "and ReLU"
+        # Not sure if these last 2 layers should be in encoder or just decoder
+        self.layers.append(nn.ReLU())
+        # "followed by a convolution"
+        self.layers.append(nn.Conv1d(in_features, in_features, kernel_size))
+        # "and a final softmax layer" (probably not for encoder, however paper does not specify)
+        # self.layers.append(nn.Softmax(dim=1))
+
 
     def forward(self, x):
-        for i in range(self.num_layers):
-            x = self.layers[i](x)
+        x = self.layers(x)
         return x
 
 
 class BytenetDecoder(nn.Module):
-    def __init__(self, num_layers, num_channels, kernel_size, max_dilation_rate):
+    def __init__(self, num_layers, in_features, kernel_size, max_dilation_rate, masked_kernel_size):
         super(BytenetDecoder, self).__init__()
         self.num_layers = num_layers
-        self.num_channels = num_channels
+        self.num_channels = in_features
         self.kernel_size = kernel_size
-        self.layers = nn.ModuleList()
+        self.layers = nn.Sequential()
         dilation_rate = 1
+        # From the Paper:
+        # Model has a series of residual blocks of increased dilation rate
+        # With masekd convolution for decoder
         for i in range(num_layers):
             # Dilation Rate doubles each layer (starting out at 1)
             dilation_rate = dilation_rate * 2
             # Dilation rate does not exceed a given maximum
             # Example from the paper: 16
-            self.layers.append(nn.Conv1d(num_channels, kernel_size,
-                                         dilation_rate if dilation_rate <= max_dilation_rate else max_dilation_rate))
+            self.layers.append(ResidualBlockReLu(in_features,
+                                                 dilation_rate if dilation_rate <= max_dilation_rate else max_dilation_rate,
+                                                 masked_kernel_size, decoder=True))
+        # "the network applies one more convolution"
+        # Note: The output of the residual layers is 2*input_features, however the output of the final convolutions is not specified in the paper
+        # Experimentation needed if it should be 2*input_features or input_features
+        self.layers.append(nn.Conv1d(in_features * 2, in_features, kernel_size))
+        # "and ReLU"
+        self.layers.append(nn.ReLU())
+        # "followed by a convolution"
+        self.layers.append(nn.Conv1d(in_features, in_features, kernel_size))
+        # "and a final softmax layer"
+        self.layers.append(nn.Softmax(dim=1))
 
     def forward(self, x):
-        for i in range(self.num_layers):
-            x = self.layers[i](x)
+        x = self.layers(x)
         return x
 
 
