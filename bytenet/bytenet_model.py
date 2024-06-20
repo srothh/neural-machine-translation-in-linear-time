@@ -58,6 +58,7 @@ class DynamicUnfolding(nn.Module):
     def calculate_target_length(self, source):
         """
         Calculates the target length for dynamic unfolding
+        Saves unnecessary computing and is more memory efficient
 
         :param source:
         :return: rounded target length as int
@@ -80,10 +81,34 @@ class DynamicUnfolding(nn.Module):
         """
         batch_size = encoder_output.size(1)
         hidden_state = None
-        end_of_sequence_symbol = None
+        end_of_sequence_symbol = 0
+        output_sequence = []
         target_length = self.calculate_target_length(source)
-        while end_of_sequence_symbol is not None:
-            pass
+
+        # The first element used as the start token
+        decoder_input = torch.zeros((batch_size, 1, encoder_output.size(2)), device=encoder_output.device)
+
+        # Loop until reach the computed target length
+        for _ in range(target_length):
+            decoder_output = decoder(decoder_input)
+
+            # Get the last token
+            last_token = decoder_output[:, -1, :]
+
+            # From the output sequence, append the last token into it
+            output_sequence.append(last_token)
+
+            # Concatenates the given sequence of seq tensors in the given dimension of
+            # the decoder input and the last token. The decoder input is initialized with the concatenated values
+            decoder_input = torch.cat((decoder_input, last_token.unsqueeze(1)), dim=1)
+
+            # Check if the last token is the end of sequence token, in this case the 0 is used
+            # TODO: eventually this should be changed, used 0 as default
+            if torch.argmax(last_token, dim=-1).item() == end_of_sequence_symbol:
+                break
+
+        return output_sequence
+
 
 class InputEmbeddingTensor:
     """
