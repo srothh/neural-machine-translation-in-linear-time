@@ -136,6 +136,21 @@ class WMT19JSONLoader:
                     print(f"Error when line is decoded: {e}")
         return loaded_data
 
+    def convert_to_tensor(self, src, trg):
+        """
+        Checks if source and target are tensor
+        If both are not tensor, they are converted to tensors
+
+        :param src:
+        :param trg:
+        :return:
+        """
+        if not torch.is_tensor(src):
+            src = torch.Tensor(src)
+        if not torch.is_tensor(trg):
+            trg = torch.tensor(trg, dtype=torch.int32)
+        return src, trg
+
     def extract_source_target(self, load_data):
         """
         Function that extracts out of the downloaded JSON the

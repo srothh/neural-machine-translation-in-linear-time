@@ -4,7 +4,7 @@ from torch.nn import init
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
-from data.data_loader import WMTLoader
+from data.data_loader import WMTLoader, WMT19JSONLoader, download_entire_de_en_dataset
 
 
 # TODO hope this works lol
@@ -244,7 +244,6 @@ class DynamicUnfolding(nn.Module):
         return output_sequence
 
 
-
 class InputEmbeddingTensor:
     """
     Class which enables the embedding of tokens.
@@ -271,7 +270,7 @@ class InputEmbeddingTensor:
         :return: A embedded tensor of size n × 2d where d is the number of inner
                 channels in the network
         """
-        lookup_table_zero = torch.zeros(1, self.embed_size, device=inputs.device)
+        lookup_table_zero = torch.zeros(1, self.embed_size)
         # Here the both look up tables are combined. The rows with the zeros and the rows
         # with values from the actual lookup table are combined therefore
         lookup_table = torch.cat((lookup_table_zero, self.lookup_table_non_zero.weight), 0)
@@ -291,3 +290,76 @@ if __name__ == '__main__':
     # source, target = wmt_loader[index]
     # print("Source:", source)
     # print("Target:", target)
+
+    # use drive in which to save dataset in cache
+    # cache_dir = 'D:/wmt19_cache'
+    # wmt_loader = WMTLoader(split="train", cache_dir=cache_dir)
+    # Number of workers provides parallel loading
+    # num_workers = 4
+    # data_load = DataLoader(wmt_loader, batch_size=32, collate_fn=wmt_loader.collate_fn, num_workers=num_workers)
+    # temp = data_load
+    #
+    # for batch in wmt_loader:
+    #     src_batch, tgt_batch = batch
+    #     break
+
+    batch_size = 100
+    output_dir = 'D:\\wmt19_json'
+
+    # download_entire_de_en_dataset(batch_size, output_dir, 4)
+
+    wmt_json_loader = WMT19JSONLoader(output_dir)
+    tokenized_source_texts, tokenized_target_texts = wmt_json_loader.load_and_tokenize(
+        'D:\\wmt19_json\\wmt_19_de_en.json')
+    src = tokenized_source_texts
+
+    trgt = tokenized_target_texts
+    inputEmbedding = InputEmbeddingTensor(32000,512)
+    inputEmbedding.embed(trgt)
+    decoder_layers = 5
+    encoder_layers = 5
+    kernel_size = 3
+    masked_kernel_size = 3
+    max_dilation_rate = 16
+    in_features = 512
+    encoder = BytenetEncoder(encoder_layers,in_features,kernel_size,max_dilation_rate,masked_kernel_size)
+    decoder = BytenetDecoder(decoder_layers,in_features,kernel_size,max_dilation_rate,masked_kernel_size)
+    encoder_decoder = EncoderDecoderStacking(encoder_layers, decoder_layers, in_features, kernel_size, max_dilation_rate, masked_kernel_size)
+    dynamic_unfolder = DynamicUnfolding()
+    target_length = dynamic_unfolder.calculate_target_length(source=src)
+    # Assuming you have your data loaders ready
+    train_loader = DataLoader(tokenized_source_texts)  # replace with your actual train data loader
+
+    # Define a loss function and an optimizer
+    criterion = torch.nn.CrossEntropyLoss()  # replace with your actual loss function
+    optimizer = torch.optim.Adam(encoder_decoder.parameters(), lr=0.0003)  # replace with your actual optimizer
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    # Number of epochs
+    num_epochs = 10
+
+    # Training loop
+    for epoch in range(num_epochs):
+        for i, (batch_inputs, batch_targets) in enumerate(train_loader):
+            for inputs, targets in zip(batch_inputs, batch_targets):
+                # Move data to the appropriate device
+                inputs = inputs.to(device).unsqueeze(0)  # Add batch dimension
+                targets = targets.to(device).unsqueeze(0)  # Add batch
+
+                # Forward pass
+                outputs = encoder_decoder(inputEmbedding(inputs))
+
+                # Compute loss
+                loss = criterion(outputs, targets)
+
+                # Backward pass and optimization
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+            # Print loss every 100 steps
+            if (i + 1) % 100 == 0:
+                print(f'Epoch [{epoch + 1}/{num_epochs}], Step [{i + 1}/{len(train_loader)}], Loss: {loss.item()}')
+
+
+
+
+
