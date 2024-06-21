@@ -147,6 +147,30 @@ class BytenetDecoder(nn.Module):
         return x
 
 
+# Todo: might needs to be overworked
+class EncoderDecoderStacking(nn.Module):
+    """
+    Stacks the encoder and decoder for the ByteNet model.
+    This means passing the output of the encoder as input to the decoder.
+
+    :param encoder_layers: The number of layers in the encoder as int.
+    :param decoder_layers: The number of layers in the decoder as int.
+    :param num_channels: The number of channels in the network as int.
+    :param kernel_size: The size of the kernel as int.
+    :param dilation_rate: The dilation rate as int.
+
+    :return x: The output of the decoder.
+    """
+    def __init__(self, encoder_layers, decoder_layers, num_channels, kernel_size, dilation_rate):
+        super(EncoderDecoderStacking, self).__init__()
+        self.encoder = BytenetEncoder(encoder_layers, num_channels, kernel_size, dilation_rate)
+        self.decoder = BytenetDecoder(decoder_layers, num_channels, kernel_size, dilation_rate)
+    def forward(self, x):
+        x = self.encoder(x)
+        x = self.decoder(x)
+        return x
+
+
 class DynamicUnfolding(nn.Module):
     """
     Initialize the dynamic unfolding with given parameters.
