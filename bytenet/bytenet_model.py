@@ -161,10 +161,10 @@ class EncoderDecoderStacking(nn.Module):
 
     :return x: The output of the decoder.
     """
-    def __init__(self, encoder_layers, decoder_layers, num_channels, kernel_size, dilation_rate):
+    def __init__(self, encoder_layers, decoder_layers, num_channels, kernel_size, dilation_rate, masked_kernel_size):
         super(EncoderDecoderStacking, self).__init__()
-        self.encoder = BytenetEncoder(encoder_layers, num_channels, kernel_size, dilation_rate)
-        self.decoder = BytenetDecoder(decoder_layers, num_channels, kernel_size, dilation_rate)
+        self.encoder = BytenetEncoder(encoder_layers, num_channels, kernel_size, dilation_rate, masked_kernel_size)
+        self.decoder = BytenetDecoder(decoder_layers, num_channels, kernel_size, dilation_rate, masked_kernel_size)
     def forward(self, x):
         x = self.encoder(x)
         x = self.decoder(x)
