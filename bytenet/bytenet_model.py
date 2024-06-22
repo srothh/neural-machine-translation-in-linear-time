@@ -348,15 +348,13 @@ if __name__ == '__main__':
 
     batch_size = 100
     output_dir = 'F:\\wmt19_json'
-
     download_entire_de_en_dataset(batch_size, output_dir, 4)
-
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    print(f'Using device: {device}')
     wmt_json_loader = WMT19JSONLoader(output_dir)
     tokenized_source_texts, tokenized_target_texts = wmt_json_loader.load_and_tokenize(
         'F:\\wmt19_json\\wmt_19_de_en.json')
     src = tokenized_source_texts
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    print(device)
     trgt = tokenized_target_texts
     inputEmbedding = InputEmbeddingTensor(32000, 128)
     # size and all params according to the paper, reduce for performance
@@ -371,32 +369,54 @@ if __name__ == '__main__':
     train_dataset, test_dataset = torch.utils.data.random_split(translation_dataset, [train_size, test_size])
     train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=64, shuffle=True)
-    # Define a loss function and an optimizer
-    # When changing Loss function, make sure to check if the decoder should have the softmax layer, and adjust that
-    criterion = torch.nn.CrossEntropyLoss()  # replace with your actual loss function
-    optimizer = torch.optim.Adam(encoder_decoder.parameters(), lr=0.0003)  # replace with your actual optimizer
-    # Number of epochs
-    num_epochs = 1
+    criterion = torch.nn.CrossEntropyLoss()
+    test_mode = False
+    if test_mode:
+        loaded_model = EncoderDecoderStacking(num_sets=2, set_size=6).to(device)
 
-    # Training loop
-    for epoch in range(1):
-        for i, (inputs, targets) in tqdm(enumerate(train_loader), total=len(train_loader)):
-            # Move data to the appropriate device
-            inputs = inputEmbedding.embed(inputs.to(device))  # Add batch dimension
-            targets = targets.to(device)  # Add batch
+        loaded_model.load_state_dict(torch.load('model_state.pth'))
 
-            # Forward pass
-            # outputs = encoder_decoder(inputEmbedding.embed(inputs).to(device))
-            outputs = encoder_decoder(inputs.to(device))
-            # Compute loss
-            loss = criterion(outputs.unsqueeze(2), targets.unsqueeze(1))
+        loaded_model.eval()
+        with torch.inference_mode():
+            for i, (inputs, targets) in enumerate(test_loader):
+                inputs = inputEmbedding.embed(inputs.to(device))  # Add batch dimension
+                targets = targets.to(device)  # Add batch
 
-            # Backward pass and optimization
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+                # Forward pass
+                outputs = loaded_model(inputs.to(device))
 
-            # Print loss every 100 steps
-            if i % 25 == 0:
-                tqdm.write(f'Epoch [{epoch + 1}/{num_epochs}], Step [{i + 1}/{len(train_loader)}], Loss: {loss.item()}')
-    torch.save(encoder_decoder.state_dict(), 'model_state.pth')
+                # Compute loss
+                loss = criterion(outputs, targets)
+
+                # Print loss every 100 steps
+                if i % 25 == 0:
+                    print(f'Step [{i + 1}/{len(test_loader)}], Loss: {loss.item()}')
+    else:
+        # Define a loss function and an optimizer
+        # When changing Loss function, make sure to check if the decoder should have the softmax layer, and adjust that
+        optimizer = torch.optim.Adam(encoder_decoder.parameters(), lr=0.0003)  # replace with your actual optimizer
+        # Number of epochs
+        num_epochs = 1
+
+        # Training loop
+        for epoch in range(1):
+            for i, (inputs, targets) in tqdm(enumerate(train_loader), total=len(train_loader)):
+                # Move data to the appropriate device
+                inputs = inputEmbedding.embed(inputs.to(device))  # Add batch dimension
+                targets = targets.to(device)  # Add batch
+
+                # Forward pass
+                # outputs = encoder_decoder(inputEmbedding.embed(inputs).to(device))
+                outputs = encoder_decoder(inputs.to(device))
+                # Compute loss
+                loss = criterion(outputs, targets)
+
+                # Backward pass and optimization
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+
+                # Print loss every 100 steps
+                if i % 25 == 0:
+                    tqdm.write(f'Epoch [{epoch + 1}/{num_epochs}], Step [{i + 1}/{len(train_loader)}], Loss: {loss.item()}')
+        torch.save(encoder_decoder.state_dict(), 'model_state.pth')
