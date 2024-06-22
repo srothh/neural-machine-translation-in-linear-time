@@ -360,7 +360,7 @@ if __name__ == '__main__':
     trgt = tokenized_target_texts
     inputEmbedding = InputEmbeddingTensor(32000, 128)
     # size and all params according to the paper, reduce for performance
-    encoder_decoder = EncoderDecoderStacking(num_sets=5,set_size=6).to(device)
+    encoder_decoder = EncoderDecoderStacking(num_sets=2,set_size=6).to(device)
     dynamic_unfolder = DynamicUnfolding()
     target_length = dynamic_unfolder.calculate_target_length(source=src)
     # Assuming you have your data loaders ready
@@ -371,7 +371,7 @@ if __name__ == '__main__':
     # Define a loss function and an optimizer
     # When changing Loss function, make sure to check if the decoder should have the softmax layer, and adjust that
     criterion = torch.nn.CrossEntropyLoss()  # replace with your actual loss function
-    optimizer = torch.optim.Adam(encoder_decoder.parameters(), lr=0.01)  # replace with your actual optimizer
+    optimizer = torch.optim.Adam(encoder_decoder.parameters(), lr=0.0003)  # replace with your actual optimizer
     # Number of epochs
     num_epochs = 10
 
