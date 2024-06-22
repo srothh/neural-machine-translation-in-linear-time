@@ -4,7 +4,7 @@ from torch import nn
 from torch.nn import init
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
-
+from tqdm import tqdm
 from data.data_loader import WMTLoader, WMT19JSONLoader, download_entire_de_en_dataset
 
 
@@ -365,9 +365,12 @@ if __name__ == '__main__':
     target_length = dynamic_unfolder.calculate_target_length(source=src)
     # Assuming you have your data loaders ready
     translation_dataset = TranslationDataset(tokenized_source_texts, tokenized_target_texts)
-
-    train_loader = DataLoader(translation_dataset, batch_size=64, shuffle=True)
-
+    dataset_size = len(translation_dataset)
+    train_size = int(0.8 * dataset_size)
+    test_size = dataset_size - train_size
+    train_dataset, test_dataset = torch.utils.data.random_split(translation_dataset, [train_size, test_size])
+    train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=64, shuffle=True)
     # Define a loss function and an optimizer
     # When changing Loss function, make sure to check if the decoder should have the softmax layer, and adjust that
     criterion = torch.nn.CrossEntropyLoss()  # replace with your actual loss function
@@ -376,8 +379,8 @@ if __name__ == '__main__':
     num_epochs = 10
 
     # Training loop
-    for epoch in range(num_epochs):
-        for i, (inputs, targets) in enumerate(train_loader):
+    for epoch in range(1):
+        for i, (inputs, targets) in tqdm(enumerate(train_loader), total=len(train_loader)):
             # Move data to the appropriate device
             inputs = inputEmbedding.embed(inputs.to(device))  # Add batch dimension
             targets = targets.to(device)  # Add batch
@@ -394,4 +397,6 @@ if __name__ == '__main__':
             optimizer.step()
 
             # Print loss every 100 steps
-            print(f'Epoch [{epoch + 1}/{num_epochs}], Step [{i + 1}/{len(train_loader)}], Loss: {loss.item()}')
+            if i % 25 == 0:
+                tqdm.write(f'Epoch [{epoch + 1}/{num_epochs}], Step [{i + 1}/{len(train_loader)}], Loss: {loss.item()}')
+    torch.save(encoder_decoder.state_dict(), 'model_state.pth')
