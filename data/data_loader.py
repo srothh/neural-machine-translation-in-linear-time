@@ -136,6 +136,21 @@ class WMT19JSONLoader:
                     print(f"Error when line is decoded: {e}")
         return loaded_data
 
+    def convert_to_tensor(self, src, trg):
+        """
+        Checks if source and target are tensor
+        If both are not tensor, they are converted to tensors
+
+        :param src:
+        :param trg:
+        :return:
+        """
+        if not torch.is_tensor(src):
+            src = torch.Tensor(src)
+        if not torch.is_tensor(trg):
+            trg = torch.tensor(trg, dtype=torch.int32)
+        return src, trg
+
     def extract_source_target(self, load_data):
         """
         Function that extracts out of the downloaded JSON the
@@ -291,4 +306,3 @@ if __name__ == '__main__':
     tokenized_source_texts, tokenized_target_texts = wmt_json_loader.load_and_tokenize('D:\\wmt19_json\\wmt_19_de_en.json')
     src = tokenized_source_texts
     trgt = tokenized_target_texts
-
