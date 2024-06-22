@@ -376,7 +376,7 @@ if __name__ == '__main__':
     criterion = torch.nn.CrossEntropyLoss()  # replace with your actual loss function
     optimizer = torch.optim.Adam(encoder_decoder.parameters(), lr=0.0003)  # replace with your actual optimizer
     # Number of epochs
-    num_epochs = 10
+    num_epochs = 1
 
     # Training loop
     for epoch in range(1):
