@@ -166,7 +166,7 @@ class BytenetDecoder(nn.Module):
         # "followed by a convolution"
         self.layers.append(nn.Conv1d(hidden_channels, hidden_channels, 1))
         # "and a final softmax layer"
-        self.layers.append(nn.Softmax(dim=1))
+       # self.layers.append(nn.Softmax(dim=1))
 
     def forward(self, x):
         for layer in self.layers:
@@ -192,8 +192,8 @@ class EncoderDecoderStacking(nn.Module):
     def __init__(self, kernel_size=3, max_dilation_rate=16, masked_kernel_size=3, num_sets=6, set_size=5,
                  hidden_channels=800):
         super(EncoderDecoderStacking, self).__init__()
-        self.encoder = BytenetEncoder()
-        self.decoder = BytenetDecoder()
+        self.encoder = BytenetEncoder(kernel_size=kernel_size, max_dilation_rate=max_dilation_rate,masked_kernel_size=masked_kernel_size, num_sets=num_sets, set_size=set_size, hidden_channels=hidden_channels)
+        self.decoder = BytenetDecoder(kernel_size=kernel_size, max_dilation_rate=max_dilation_rate,masked_kernel_size=masked_kernel_size, num_sets=num_sets, set_size=set_size, hidden_channels=hidden_channels)
 
     def forward(self, x):
         x = self.encoder(x)
@@ -359,18 +359,19 @@ if __name__ == '__main__':
     print(device)
     trgt = tokenized_target_texts
     inputEmbedding = InputEmbeddingTensor(32000, 128)
-    #    inputEmbedding.embed(trgt)
-    encoder_decoder = EncoderDecoderStacking().to(device)
+    # size and all params according to the paper, reduce for performance
+    encoder_decoder = EncoderDecoderStacking(num_sets=5,set_size=6).to(device)
     dynamic_unfolder = DynamicUnfolding()
     target_length = dynamic_unfolder.calculate_target_length(source=src)
     # Assuming you have your data loaders ready
     translation_dataset = TranslationDataset(tokenized_source_texts, tokenized_target_texts)
 
-    train_loader = DataLoader(translation_dataset, batch_size=32, shuffle=True)
+    train_loader = DataLoader(translation_dataset, batch_size=64, shuffle=True)
 
     # Define a loss function and an optimizer
+    # When changing Loss function, make sure to check if the decoder should have the softmax layer, and adjust that
     criterion = torch.nn.CrossEntropyLoss()  # replace with your actual loss function
-    optimizer = torch.optim.Adam(encoder_decoder.parameters(), lr=0.0003)  # replace with your actual optimizer
+    optimizer = torch.optim.Adam(encoder_decoder.parameters(), lr=0.01)  # replace with your actual optimizer
     # Number of epochs
     num_epochs = 10
 
@@ -385,7 +386,7 @@ if __name__ == '__main__':
             # outputs = encoder_decoder(inputEmbedding.embed(inputs).to(device))
             outputs = encoder_decoder(inputs.to(device))
             # Compute loss
-            loss = criterion(outputs, targets)
+            loss = criterion(outputs.unsqueeze(2), targets.unsqueeze(1))
 
             # Backward pass and optimization
             optimizer.zero_grad()
