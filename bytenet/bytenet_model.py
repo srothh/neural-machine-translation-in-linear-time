@@ -139,7 +139,7 @@ class BytenetEncoder(nn.Module):
 
 class BytenetDecoder(nn.Module):
     def __init__(self, kernel_size=3, max_dilation_rate=16, masked_kernel_size=3, num_sets=6, set_size=5,
-                 hidden_channels=800):
+                 hidden_channels=800, output_channels=128):
         super(BytenetDecoder, self).__init__()
         self.num_channels = hidden_channels
         self.kernel_size = kernel_size
@@ -164,9 +164,10 @@ class BytenetDecoder(nn.Module):
         # "and ReLU"
         self.layers.append(nn.ReLU())
         # "followed by a convolution"
-        self.layers.append(nn.Conv1d(hidden_channels, hidden_channels, 1))
+        self.layers.append(nn.Conv1d(hidden_channels, output_channels, 1))
         # "and a final softmax layer"
-       # self.layers.append(nn.Softmax(dim=1))
+
+    # self.layers.append(nn.Softmax(dim=1))
 
     def forward(self, x):
         for layer in self.layers:
@@ -190,10 +191,14 @@ class EncoderDecoderStacking(nn.Module):
     """
 
     def __init__(self, kernel_size=3, max_dilation_rate=16, masked_kernel_size=3, num_sets=6, set_size=5,
-                 hidden_channels=800):
+                 hidden_channels=800, output_channels=128):
         super(EncoderDecoderStacking, self).__init__()
-        self.encoder = BytenetEncoder(kernel_size=kernel_size, max_dilation_rate=max_dilation_rate,masked_kernel_size=masked_kernel_size, num_sets=num_sets, set_size=set_size, hidden_channels=hidden_channels)
-        self.decoder = BytenetDecoder(kernel_size=kernel_size, max_dilation_rate=max_dilation_rate,masked_kernel_size=masked_kernel_size, num_sets=num_sets, set_size=set_size, hidden_channels=hidden_channels)
+        self.encoder = BytenetEncoder(kernel_size=kernel_size, max_dilation_rate=max_dilation_rate,
+                                      masked_kernel_size=masked_kernel_size, num_sets=num_sets, set_size=set_size,
+                                      hidden_channels=hidden_channels)
+        self.decoder = BytenetDecoder(kernel_size=kernel_size, max_dilation_rate=max_dilation_rate,
+                                      masked_kernel_size=masked_kernel_size, num_sets=num_sets, set_size=set_size,
+                                      hidden_channels=hidden_channels, output_channels=output_channels)
 
     def forward(self, x):
         x = self.encoder(x)
@@ -326,15 +331,34 @@ class TranslationDataset(Dataset):
         return self.source_texts[idx], self.target_texts[idx]
 
 
-if __name__ == '__main__':
-    cache_dir = 'F:/wmt19_cache'
-    # wmt_loader = WMTLoader(split="train", cache_dir=cache_dir)
-    # index = 0
-    # source, target = wmt_loader[index]
-    # print("Source:", source)
-    # print("Target:", target)
+def convert_output_to_text(out, loader):
+    # Assuming outputs is a tensor containing token ids
+    # Convert tensor to list
+    token_ids = out.tolist()
 
-    # use drive in which to save dataset in cache
+    # Decode token ids to text
+    translated_texts = [loader.tokenizer.decode(ids) for ids in token_ids]
+
+    return translated_texts
+
+# TODO: I have no idea what I'm doing or if this is correct
+def translate(to_translate, model, loader):
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    model.eval()
+    inputs = inputEmbedding.embed(loader.tokenize_texts([to_translate])[0].to(device))
+    with torch.no_grad():
+        outputs = model(inputs)
+    outputs = torch.argmax(outputs, dim=0)
+    token_ids = outputs.tolist()
+    translated_texts = loader.tokenizer.decode(token_ids)
+
+    print(f"Translated text: {translated_texts}")
+
+if __name__ == '__main__':
+    test_mode = False
+    num_sets = 4
+    set_size = 5
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
     cache_dir = 'F:/wmt19_cache'
     #    wmt_loader = WMTLoader(split="train", cache_dir=cache_dir)
     # Number of workers provides parallel loading
@@ -352,27 +376,75 @@ if __name__ == '__main__':
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f'Using device: {device}')
     wmt_json_loader = WMT19JSONLoader(output_dir)
-    tokenized_source_texts, tokenized_target_texts = wmt_json_loader.load_and_tokenize(
-        'F:\\wmt19_json\\wmt_19_de_en.json')
-    src = tokenized_source_texts
-    trgt = tokenized_target_texts
-    inputEmbedding = InputEmbeddingTensor(32000, 128)
-    # size and all params according to the paper, reduce for performance
-    encoder_decoder = EncoderDecoderStacking(num_sets=2,set_size=6).to(device)
-    dynamic_unfolder = DynamicUnfolding()
-    target_length = dynamic_unfolder.calculate_target_length(source=src)
-    # Assuming you have your data loaders ready
-    translation_dataset = TranslationDataset(tokenized_source_texts, tokenized_target_texts)
-    dataset_size = len(translation_dataset)
-    train_size = int(0.8 * dataset_size)
-    test_size = dataset_size - train_size
-    train_dataset, test_dataset = torch.utils.data.random_split(translation_dataset, [train_size, test_size])
-    train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
-    test_loader = DataLoader(test_dataset, batch_size=64, shuffle=True)
-    criterion = torch.nn.CrossEntropyLoss()
-    test_mode = False
+
     if test_mode:
-        loaded_model = EncoderDecoderStacking(num_sets=2, set_size=6).to(device)
+        # Test the model
+        loaded_model = EncoderDecoderStacking(num_sets=num_sets, set_size=set_size, output_channels=384).to(device)
+
+        loaded_model.load_state_dict(torch.load('model_state.pth'))
+        inputEmbedding = InputEmbeddingTensor(384, 128)
+
+        loaded_model.eval()
+        text = ["Hallo, wie geht es dir?"]
+        print(f"Translating: {text}")
+        translate(text, loaded_model, wmt_json_loader)
+    else:
+        cache_dir = 'F:/wmt19_cache'
+        # wmt_loader = WMTLoader(split="train", cache_dir=cache_dir)
+        # index = 0
+        # source, target = wmt_loader[index]
+        # print("Source:", source)
+        # print("Target:", target)
+
+        # use drive in which to save dataset in cache
+        tokenized_source_texts, tokenized_target_texts = wmt_json_loader.load_and_tokenize(
+            'F:\\wmt19_json\\wmt_19_de_en.json')
+        src = tokenized_source_texts
+        trgt = tokenized_target_texts
+        vocab_size = len(wmt_json_loader.tokenizer.get_vocab())
+        print(f"Vocabulary size: {vocab_size}")
+        inputEmbedding = InputEmbeddingTensor(vocab_size, 128)
+        # size and all params according to the paper, reduce for performance
+        encoder_decoder = EncoderDecoderStacking(num_sets=num_sets, set_size=set_size, output_channels=vocab_size).to(
+            device)
+        dynamic_unfolder = DynamicUnfolding()
+        target_length = dynamic_unfolder.calculate_target_length(source=src)
+        # Assuming you have your data loaders ready
+        translation_dataset = TranslationDataset(tokenized_source_texts, tokenized_target_texts)
+        dataset_size = len(translation_dataset)
+        train_size = int(0.8 * dataset_size)
+        test_size = dataset_size - train_size
+        train_dataset, test_dataset = torch.utils.data.random_split(translation_dataset, [train_size, test_size])
+        train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
+        test_loader = DataLoader(test_dataset, batch_size=64, shuffle=True)
+        criterion = torch.nn.CrossEntropyLoss()
+        # Define a loss function and an optimizer
+        # When changing Loss function, make sure to check if the decoder should have the softmax layer, and adjust that
+        optimizer = torch.optim.Adam(encoder_decoder.parameters(), lr=0.0003)  # replace with your actual optimizer
+        # Number of epochs
+        num_epochs = 1
+        # Training loop
+        for epoch in range(1):
+            for i, (inputs, targets) in tqdm(enumerate(train_loader), total=len(train_loader)):
+                # Move data to the appropriate device
+                inputs = inputEmbedding.embed(inputs.to(device))  # Add batch dimension
+                targets = targets.to(device)  # Add batch
+
+                outputs = encoder_decoder(inputs.to(device))
+                # Compute loss
+                loss = criterion(outputs, targets)
+
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+
+                # Print loss every 100 steps
+                if i % 25 == 0:
+                    tqdm.write(
+                        f'Epoch [{epoch + 1}/{num_epochs}], Step [{i + 1}/{len(train_loader)}], Loss: {loss.item()}')
+        torch.save(encoder_decoder.state_dict(), 'model_state.pth')
+        # should match structure of encoder_decoder
+        loaded_model = EncoderDecoderStacking(num_sets=num_sets, set_size=set_size).to(device)
 
         loaded_model.load_state_dict(torch.load('model_state.pth'))
 
@@ -382,41 +454,9 @@ if __name__ == '__main__':
                 inputs = inputEmbedding.embed(inputs.to(device))  # Add batch dimension
                 targets = targets.to(device)  # Add batch
 
-                # Forward pass
                 outputs = loaded_model(inputs.to(device))
-
-                # Compute loss
                 loss = criterion(outputs, targets)
 
                 # Print loss every 100 steps
                 if i % 25 == 0:
                     print(f'Step [{i + 1}/{len(test_loader)}], Loss: {loss.item()}')
-    else:
-        # Define a loss function and an optimizer
-        # When changing Loss function, make sure to check if the decoder should have the softmax layer, and adjust that
-        optimizer = torch.optim.Adam(encoder_decoder.parameters(), lr=0.0003)  # replace with your actual optimizer
-        # Number of epochs
-        num_epochs = 1
-
-        # Training loop
-        for epoch in range(1):
-            for i, (inputs, targets) in tqdm(enumerate(train_loader), total=len(train_loader)):
-                # Move data to the appropriate device
-                inputs = inputEmbedding.embed(inputs.to(device))  # Add batch dimension
-                targets = targets.to(device)  # Add batch
-
-                # Forward pass
-                # outputs = encoder_decoder(inputEmbedding.embed(inputs).to(device))
-                outputs = encoder_decoder(inputs.to(device))
-                # Compute loss
-                loss = criterion(outputs, targets)
-
-                # Backward pass and optimization
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
-
-                # Print loss every 100 steps
-                if i % 25 == 0:
-                    tqdm.write(f'Epoch [{epoch + 1}/{num_epochs}], Step [{i + 1}/{len(train_loader)}], Loss: {loss.item()}')
-        torch.save(encoder_decoder.state_dict(), 'model_state.pth')

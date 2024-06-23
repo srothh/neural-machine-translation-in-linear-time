@@ -277,7 +277,7 @@ def download_entire_de_en_dataset(batch_size, output_dir, num_workers):
             futures.append(executor.submit(download_batch_and_save, offset, batch_size, output_file))
             offset += batch_size
             # if offset >= 34800000:
-            if offset >= 3480:
+            if offset >= 34800:
                 break
 
         for future in as_completed(futures):
@@ -286,7 +286,7 @@ def download_entire_de_en_dataset(batch_size, output_dir, num_workers):
 
 if __name__ == '__main__':
     # use drive in which to save dataset in cache
-    cache_dir = 'D:/wmt19_cache'
+    cache_dir = 'F:/wmt19_cache'
     # wmt_loader = WMTLoader(split="train", cache_dir=cache_dir)
     # Number of workers provides parallel loading
     # num_workers = 4
@@ -298,7 +298,7 @@ if __name__ == '__main__':
     #     break
 
     batch_size = 100
-    output_dir = 'D:\\wmt19_json'
+    output_dir = 'F:\\wmt19_json'
 
     # download_entire_de_en_dataset(batch_size, output_dir, 4)
 
