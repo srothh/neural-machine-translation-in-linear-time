@@ -46,10 +46,10 @@ class ResidualBlockReLu(nn.Module):
     def __init__(self, d, dilation, k, decoder=False):
         super(ResidualBlockReLu, self).__init__()
         self.decoder = decoder
-        self.layer_norm1 = nn.LayerNorm(128)
+        self.layer_norm1 = nn.LayerNorm(1)
         self.reLu1 = nn.ReLU()
         self.conv1 = nn.Conv1d(d * 2, d, 1)
-        self.layer_norm2 = nn.LayerNorm(128)
+        self.layer_norm2 = nn.LayerNorm(1)
         self.reLu2 = nn.ReLU()
         # Masked kernel size is k
         # Dilation only used for masked convolution
@@ -61,7 +61,7 @@ class ResidualBlockReLu(nn.Module):
             # Padding still needed to keep the size of the input and output the same
             padding = (k - 1) * dilation // 2
             self.conv2 = nn.Conv1d(d, d, k, dilation=dilation, padding=padding)
-        self.layer_norm3 = nn.LayerNorm(128)
+        self.layer_norm3 = nn.LayerNorm(1)
         self.reLu3 = nn.ReLU()
         self.conv3 = nn.Conv1d(d, d * 2, 1)
 
@@ -139,7 +139,7 @@ class BytenetEncoder(nn.Module):
 
 class BytenetDecoder(nn.Module):
     def __init__(self, kernel_size=3, max_dilation_rate=16, masked_kernel_size=3, num_sets=6, set_size=5,
-                 hidden_channels=800, output_channels=128):
+                 hidden_channels=800, output_channels=384):
         super(BytenetDecoder, self).__init__()
         self.num_channels = hidden_channels
         self.kernel_size = kernel_size
@@ -166,6 +166,7 @@ class BytenetDecoder(nn.Module):
         # "followed by a convolution"
         self.layers.append(nn.Conv1d(hidden_channels, output_channels, 1))
         # "and a final softmax layer"
+        self.layers.append(nn.LogSoftmax(dim=-1))
 
     # self.layers.append(nn.Softmax(dim=1))
 
@@ -191,7 +192,7 @@ class EncoderDecoderStacking(nn.Module):
     """
 
     def __init__(self, kernel_size=3, max_dilation_rate=16, masked_kernel_size=3, num_sets=6, set_size=5,
-                 hidden_channels=800, output_channels=128):
+                 hidden_channels=800, output_channels = 384):
         super(EncoderDecoderStacking, self).__init__()
         self.encoder = BytenetEncoder(kernel_size=kernel_size, max_dilation_rate=max_dilation_rate,
                                       masked_kernel_size=masked_kernel_size, num_sets=num_sets, set_size=set_size,
@@ -333,6 +334,7 @@ class TranslationDataset(Dataset):
 
 def convert_output_to_text(out, loader):
     # Assuming outputs is a tensor containing token ids
+
     # Convert tensor to list
     token_ids = out.tolist()
 
@@ -356,7 +358,7 @@ def translate(to_translate, model, loader):
 
 if __name__ == '__main__':
     test_mode = False
-    num_sets = 4
+    num_sets = 3
     set_size = 5
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     cache_dir = 'F:/wmt19_cache'
@@ -376,13 +378,13 @@ if __name__ == '__main__':
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f'Using device: {device}')
     wmt_json_loader = WMT19JSONLoader(output_dir)
-
+    embed_size = 1 # Paper
     if test_mode:
         # Test the model
         loaded_model = EncoderDecoderStacking(num_sets=num_sets, set_size=set_size, output_channels=384).to(device)
 
         loaded_model.load_state_dict(torch.load('model_state.pth'))
-        inputEmbedding = InputEmbeddingTensor(384, 128)
+        inputEmbedding = InputEmbeddingTensor(384, embed_size)
 
         loaded_model.eval()
         text = ["Hallo, wie geht es dir?"]
@@ -403,7 +405,7 @@ if __name__ == '__main__':
         trgt = tokenized_target_texts
         vocab_size = len(wmt_json_loader.tokenizer.get_vocab())
         print(f"Vocabulary size: {vocab_size}")
-        inputEmbedding = InputEmbeddingTensor(vocab_size, 128)
+        inputEmbedding = InputEmbeddingTensor(vocab_size, embed_size)
         # size and all params according to the paper, reduce for performance
         encoder_decoder = EncoderDecoderStacking(num_sets=num_sets, set_size=set_size, output_channels=vocab_size).to(
             device)
@@ -415,9 +417,9 @@ if __name__ == '__main__':
         train_size = int(0.8 * dataset_size)
         test_size = dataset_size - train_size
         train_dataset, test_dataset = torch.utils.data.random_split(translation_dataset, [train_size, test_size])
-        train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
-        test_loader = DataLoader(test_dataset, batch_size=64, shuffle=True)
-        criterion = torch.nn.CrossEntropyLoss()
+        train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True)
+        test_loader = DataLoader(test_dataset, batch_size=128, shuffle=True)
+        criterion = torch.nn.NLLLoss()
         # Define a loss function and an optimizer
         # When changing Loss function, make sure to check if the decoder should have the softmax layer, and adjust that
         optimizer = torch.optim.Adam(encoder_decoder.parameters(), lr=0.0003)  # replace with your actual optimizer
@@ -426,14 +428,18 @@ if __name__ == '__main__':
         # Training loop
         for epoch in range(1):
             for i, (inputs, targets) in tqdm(enumerate(train_loader), total=len(train_loader)):
-                # Move data to the appropriate device
                 inputs = inputEmbedding.embed(inputs.to(device))  # Add batch dimension
                 targets = targets.to(device)  # Add batch
 
                 outputs = encoder_decoder(inputs.to(device))
-                # Compute loss
-                loss = criterion(outputs, targets)
+                # Reshape outputs to be [batch_size * sequence_length, embed_size]
+                outputs = outputs.view(-1, outputs.size(-1))
 
+                # Reshape targets to be [batch_size * sequence_length]
+                targets = targets.view(-1)
+                outputs_class_indices = torch.argmax(outputs, dim=1)
+
+                loss = criterion(outputs_class_indices, targets)
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
@@ -455,7 +461,13 @@ if __name__ == '__main__':
                 targets = targets.to(device)  # Add batch
 
                 outputs = loaded_model(inputs.to(device))
-                loss = criterion(outputs, targets)
+                # Reshape outputs to be [batch_size * sequence_length, embed_size]
+                outputs = outputs.view(-1, outputs.size(-1))
+
+                # Reshape targets to be [batch_size * sequence_length]
+                targets = targets.view(-1)
+
+                loss = criterion(torch.argmax(outputs, dim=1), targets)
 
                 # Print loss every 100 steps
                 if i % 25 == 0:

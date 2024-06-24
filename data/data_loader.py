@@ -277,7 +277,7 @@ def download_entire_de_en_dataset(batch_size, output_dir, num_workers):
             futures.append(executor.submit(download_batch_and_save, offset, batch_size, output_file))
             offset += batch_size
             # if offset >= 34800000:
-            if offset >= 34800:
+            if offset >= 348:
                 break
 
         for future in as_completed(futures):
