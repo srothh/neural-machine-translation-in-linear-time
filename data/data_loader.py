@@ -1,6 +1,5 @@
 import json
-import torch
-import torch.nn as nn
+
 import requests
 import torch
 import pickle
@@ -278,7 +277,7 @@ def download_entire_de_en_dataset(batch_size, output_dir, num_workers):
             futures.append(executor.submit(download_batch_and_save, offset, batch_size, output_file))
             offset += batch_size
             # if offset >= 34800000:
-            if offset >= 3480:
+            if offset >= 348:
                 break
 
         for future in as_completed(futures):
@@ -287,7 +286,7 @@ def download_entire_de_en_dataset(batch_size, output_dir, num_workers):
 
 if __name__ == '__main__':
     # use drive in which to save dataset in cache
-    cache_dir = 'D:/wmt19_cache'
+    cache_dir = 'F:/wmt19_cache'
     # wmt_loader = WMTLoader(split="train", cache_dir=cache_dir)
     # Number of workers provides parallel loading
     # num_workers = 4
@@ -299,40 +298,11 @@ if __name__ == '__main__':
     #     break
 
     batch_size = 100
-    output_dir = 'D:\\wmt19_json'
+    output_dir = 'F:\\wmt19_json'
 
     # download_entire_de_en_dataset(batch_size, output_dir, 4)
 
-    # wmt_json_loader = WMT19JSONLoader(output_dir)
-    # tokenized_source_texts, tokenized_target_texts = wmt_json_loader.load_and_tokenize('D:\\wmt19_json\\wmt_19_de_en.json')
-    # src = tokenized_source_texts
-    # trgt = tokenized_target_texts
-
-    # Beispielvokabular und Einbettungsdimension
-    vocab = ["Hallo", ",", "wie", "geht"]
-    vocab_size = len(vocab)
-    embedding_dim = 3
-
-    # Dummy-Vokabular-ID-Zuordnung
-
-    vocab_to_id = {word: idx for idx, word in enumerate(vocab)}
-
-    # Einbettungsschicht
-    # Wörter in Zahlen umgewandelt
-    embedding_layer = nn.Embedding(vocab_size, embedding_dim)
-
-    # Die Gewichtsmatrix der Einbettungsschicht (Lookup-Tabelle)
-    print("Lookup-Tabelle (Einbettungsmatrix):")
-    print(embedding_layer.weight)
-
-    # Beispiel-Tokens (IDs)
-    tokens = ["Hallo", "wie"]
-    token_ids = [vocab_to_id[token] for token in tokens]
-    input_tensor = torch.tensor(token_ids)
-
-    # Eingabesequenz einbetten
-    embedding_tensor = embedding_layer(input_tensor)
-
-    print("\nToken-IDs:", token_ids)
-    print("Eingebettete Repräsentationen:\n", embedding_tensor)
-
+    wmt_json_loader = WMT19JSONLoader(output_dir)
+    tokenized_source_texts, tokenized_target_texts = wmt_json_loader.load_and_tokenize('D:\\wmt19_json\\wmt_19_de_en.json')
+    src = tokenized_source_texts
+    trgt = tokenized_target_texts
